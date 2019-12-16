@@ -1,0 +1,63 @@
+global
+   log /dev/log local0
+   log /dev/log local1 notice
+   chroot /var/lib/haproxy
+   stats timeout 30s
+   user haproxy
+   group haproxy
+   daemon
+   maxconn 2000
+#   nbproc 2
+   tune.ssl.default-dh-param 2048
+
+defaults
+   log global
+   mode tcp
+   option tcplog
+   option dontlognull
+   timeout connect 10m
+   timeout client 5m
+   timeout server 10m
+#  store conn_cur
+
+frontend http_front
+   bind *:80
+   stats uri /haproxy
+   stats realm Haproxy\ Statistics
+   stats auth ppdb:monitoringppdb2019
+   stats admin if TRUE
+   reqadd X-Forwarded-Proto:\ http
+#   default_backend sasada_back
+   maxconn 20000
+#   redirect scheme https code 301 if !{ ssl_fc }
+   redirect scheme https code 301
+
+frontend https_front
+   mode tcp
+   bind *:443 ssl crt /etc/haproxy/certs/sasadasoft.com.pem crt /etc/haproxy/certs/cloud.sinarkreasindo.com.pem crt /etc/haproxy/certs/office.sinarkreasindo.com.pem crt /etc/haproxy/certs/office.sasadasoft.com.pem
+   use_backend cloud_back if { ssl_fc_sni cloud.sinarkreasindo.com }
+   use_backend sasada_back if { ssl_fc_sni sasadasoft.com }
+   use_backend office_back if { ssl_fc_sni office.sasadasoft.com }
+#   use_backend office_back if { ssl_fc_sni mp2.pematangsiantarkota.com }
+   reqadd X-Forwarded-Proto:\ https
+#   acl letsencrypt-acl path_beg /.well-known/acme-challenge/
+#   use_backend letsencrypt-backend if letsencrypt-acl
+   maxconn 20000
+
+backend sasada_back
+   fullconn 5000
+   option forwardfor
+   server web1 10.255.254.201:80 check
+
+backend cloud_back
+   fullconn 5000
+   option forwardfor
+   server web1 10.255.254.202:80 check
+
+backend office_back
+   mode tcp   
+   option forwardfor
+   server web1 10.255.254.220:80 check
+
+backend letsencrypt-backend
+   server letsencrypt 127.0.0.1:54321

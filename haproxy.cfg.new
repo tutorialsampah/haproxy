@@ -1,0 +1,55 @@
+global
+   log /dev/log local0
+   log /dev/log local1 notice
+   chroot /var/lib/haproxy
+   stats timeout 30s
+   user haproxy
+   group haproxy
+   daemon
+   maxconn 20000
+   nbproc 6
+   ssl.default-dh-param 2048
+
+defaults
+
+   log global
+
+   mode http
+
+   option httplog
+
+   option dontlognull
+
+   timeout connect 10m
+
+   timeout client 5m
+
+   timeout server 10m
+
+
+
+frontend http_front
+   bind *:80
+   stats uri /haproxy
+   stats realm Haproxy\ Statistics
+   stats auth ppdb:monitoringppdb2019
+   stats admin if TRUE
+   reqadd X-Forwarded-Proto:\ http
+   default_backend sasada_back
+   maxconn 20000
+#   redirect scheme https code 301 if !{ ssl_fc }
+   redirect scheme https code 301
+
+frontend https_front
+   bind *:443 ssl crt /etc/haproxy/certs/sasadasoft.com.pem
+   reqadd X-Forwarded-Proto:\ https
+   acl letsencrypt-acl path_beg /.well-known/acme-challenge/
+   use_backend letsencrypt-backend if letsencrypt-acl
+   maxconn 20000
+   default_backend sasada_back
+
+backend sasada_back
+   fullconn 5000
+   balance roundrobin
+   option forwardfor
+   server web1 10.255.254.201:80 check

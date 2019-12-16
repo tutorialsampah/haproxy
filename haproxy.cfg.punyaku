@@ -1,0 +1,104 @@
+global
+   log /dev/log local0
+   log /dev/log local1 notice
+   chroot /var/lib/haproxy
+   stats timeout 30s
+   user haproxy
+   group haproxy
+   daemon
+   maxconn 5000
+   #nbproc 2
+   #cpu-map 1 0
+   #cpu-map 2 1
+#   tune.ssl.default-dh-param 2048
+
+defaults
+   log 127.0.0.1 local0
+   log global
+   mode tcp
+   balance leastconn
+   option httplog
+   option dontlognull
+   option tcplog
+   timeout connect 5000
+   timeout client 50000
+   timeout server 50000
+
+frontend http_front
+   bind *:80
+   stats uri /haproxy?stats
+   stats realm Haproxy\ Statistics
+   stats auth ppdb:monitoringppdb2018
+   stats admin if TRUE
+#   reqadd X-Forwarded-Proto:\ http
+#   default_backend http_back
+   use_backend http_back if { hdr(host) -i cloud.sinarkreasindo.com }
+   use_backend sasada_back if { hdr(host) -i sasadasoft.com }
+   use_backend office_back if { hdr(host) -i office.sinarkreasindo.com }
+   use_backend office_back if { hdr(host) -i mp2.pematangsiantarkota.com }
+   maxconn 5000
+#   redirect scheme https code 301 if !{ ssl_fc }
+#   redirect scheme https code 301
+
+frontend https_front
+   bind *:443 ssl crt /etc/haproxy/certs/cloud.sinarkreasindo.com.pem crt /etc/haproxy/certs/sasadasoft.com.pem
+   use_backend http_back if { ssl_fc_sni cloud.sinarkreasindo.com }
+   use_backend sasada_back if { ssl_fc_sni sasadasoft.com }
+   use_backend office_back if { ssl_fc_sni office.sinarkreasindo.com }
+   use_backend office_back if { ssl_fc_sni mp2.pematangsiantarkota.com }
+#   acl host1 hdr(host) -i cloud.sinarkreasindo.com   
+#   use_backend http_back if host1
+#   reqadd X-Forwarded-Proto:\ https
+#   acl letsencrypt-acl path_beg /.well-known/acme-challenge/
+#   use_backend letsencrypt-backend if letsencrypt-acl
+#  default_backend http_back
+
+#frontend https1_front
+#   bind *:443 ssl crt /etc/haproxy/certs/all.pem
+#   acl host2 hdr(host) -i sasadasoft.com
+#   use_backend sasada_back if host2
+#  reqadd X-Forwarded-Proto:\ https
+#   acl letsencrypt-acl path_beg /.well-known/acme-challenge/
+#   use_backend letsencrypt-backend if letsencrypt-acl
+#  default_backend http_back
+
+#errorfile 503 /etc/haproxy/error/error-http.http
+
+backend http_back
+   fullconn 5000
+   balance roundrobin
+   option forwardfor
+#   cookie SRVNAME insert
+#   server web1 10.255.254.42:80 maxconn 5000 cookie rkasbos check
+#   server web2 10.255.254.54:80 maxconn 5000 cookie rkasbos2 check
+   server web1 10.255.254.202:80 maxconn 5000 check
+#   server web2 10.255.254.54:80 maxconn 5000 check
+   # server web3 10.255.254.31:80 maxconn 15000 check
+   # server web4 10.255.254.44:80 maxconn 15000 check
+   # server web5 10.255.254.53:80 maxconn 25000 check
+   # server web6 10.255.254.103:80 maxconn 25000 check
+   # server web7 10.255.254.34:80 maxconn 25000 check
+
+backend office_back
+#   stick on src table sourceaddr
+   option tcp-check
+   tcp-check connect port 443 ssl
+#   cookie SRVNAME insert
+#   server web1 10.255.254.42:80 maxconn 5000 cookie rkasbos check
+#   server web2 10.255.254.54:80 maxconn 5000 cookie rkasbos2 check
+   server web1 office.sinarkreasindo.com:443 check verify none
+
+backend sasada_back
+   fullconn 5000
+   balance roundrobin
+   option forwardfor
+   server web1 10.255.254.201:80 maxconn 5000 check
+
+backend mp2siantar_back
+   fullconn 5000
+   balance roundrobin
+   option forwardfor
+   server web1 10.255.254.207:80 maxconn 5000 check
+
+backend letsencrypt-backend
+   server letsencrypt 127.0.0.1:54321
